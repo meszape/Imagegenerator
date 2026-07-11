@@ -9,7 +9,7 @@ class ProviderResult:
     provider:Provider; model:str; request_payload:dict[str,Any]; raw_response:dict[str,Any]; response_id:str|None; previous_response_id:str|None; images:list[ProviderImage]; safety_feedback:dict[str,Any]=field(default_factory=dict); revised_prompt:str|None=None
 @dataclass
 class ProviderCapabilities:
-    provider:Provider; supports_multi_turn:bool; supports_previous_response_id:bool; supports_per_category_safety:bool; supports_block_none:bool; supports_off:bool; supports_revised_prompt:bool; notes:list[str]
+    provider:Provider; supports_multi_turn:bool; supports_previous_response_id:bool; supports_per_category_safety:bool; supports_block_none:bool; supports_off:bool; supports_revised_prompt:bool; supports_low_moderation:bool=False; notes:list[str]=field(default_factory=list)
 class ImageProviderAdapter(ABC):
     provider:Provider
     @abstractmethod

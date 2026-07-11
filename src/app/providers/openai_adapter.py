@@ -3,7 +3,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 from app.config import get_settings
 from app.core.enums import Provider, SafetyProfile
 from app.core.exceptions import ProviderOutputParseError, ProviderRateLimitError, ProviderTemporaryError, ProviderAuthError, ProviderInvalidRequestError, ProviderSafetyBlockedError
-from app.core.safety import openai_safety_capability_note
+from app.core.safety import map_openai_safety, openai_safety_capability_note
 from app.providers.base import ImageProviderAdapter, ProviderCapabilities, ProviderImage, ProviderResult
 from app.utils.files import decode_b64
 class OpenAIImageAdapter(ImageProviderAdapter):
@@ -13,20 +13,28 @@ class OpenAIImageAdapter(ImageProviderAdapter):
             from openai import OpenAI
             client=OpenAI(api_key=get_settings().openai_api_key, timeout=get_settings().request_timeout_seconds)
         self.client=client
-    def _request_payload(self, model,prompt,previous_response_id,output_format,provider_config):
-        payload={'model':model,'input':prompt,'tools':[{'type':'image_generation'}]}
-        if previous_response_id: payload['previous_response_id']=previous_response_id
-        if output_format: payload['tool_choice']={'type':'image_generation'}
-        payload.update(provider_config or {})
+    def _request_payload(self, model, prompt, previous_response_id, output_format, provider_config, safety_profile):
+        config = dict(provider_config or {})
+        moderation = map_openai_safety(safety_profile, config.pop('moderation', None))
+        tool = {'type': 'image_generation', 'moderation': moderation}
+        for key in ('quality', 'size', 'output_format', 'background', 'action', 'input_fidelity', 'partial_images'):
+            value = output_format if key == 'output_format' and output_format else config.pop(key, None)
+            if value is not None:
+                tool[key] = value
+        payload = {'model': model, 'input': prompt, 'tools': [tool]}
+        if previous_response_id:
+            payload['previous_response_id'] = previous_response_id
+        payload['tool_choice'] = {'type': 'image_generation'}
+        payload.update(config)
         return payload
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1,max=8), retry=retry_if_exception_type(ProviderTemporaryError))
     def _call(self,payload):
         try: return self.client.responses.create(**payload)
         except Exception as exc: raise self.normalize_error(exc)
     def create_initial_image(self, model, prompt, safety_profile, custom_safety_settings=None, output_format=None, provider_config=None):
-        payload=self._request_payload(model,prompt,None,output_format,provider_config); return self._parse(self._call(payload),payload,None,model)
+        payload=self._request_payload(model,prompt,None,output_format,provider_config,safety_profile); return self._parse(self._call(payload),payload,None,model)
     def continue_image_turn(self, model, prompt, previous_response_id, history, safety_profile, custom_safety_settings=None, output_format=None, provider_config=None):
-        payload=self._request_payload(model,prompt,previous_response_id,output_format,provider_config); return self._parse(self._call(payload),payload,previous_response_id,model)
+        payload=self._request_payload(model,prompt,previous_response_id,output_format,provider_config,safety_profile); return self._parse(self._call(payload),payload,previous_response_id,model)
     def _dump(self,obj):
         if hasattr(obj,'model_dump'): return obj.model_dump(mode='json')
         if isinstance(obj,dict): return obj
@@ -50,4 +58,4 @@ class OpenAIImageAdapter(ImageProviderAdapter):
         if 'safety' in msg.lower() or 'policy' in msg.lower(): return ProviderSafetyBlockedError(msg,'openai')
         if 'badrequest' in name or 'invalid' in name: return ProviderInvalidRequestError(msg,'openai')
         return ProviderTemporaryError(msg,'openai')
-    def get_capabilities(self): return ProviderCapabilities(Provider.openai,True,True,False,False,False,True,[openai_safety_capability_note(),'Uses Responses API image_generation tool; previous_response_id continues turns.'])
+    def get_capabilities(self): return ProviderCapabilities(Provider.openai,True,True,False,False,False,True,True,[openai_safety_capability_note(),'Uses Responses API image_generation tool; previous_response_id continues turns.'])

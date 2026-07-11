@@ -9,7 +9,7 @@ class Fake(ImageProviderAdapter):
     provider=Provider.openai
     def create_initial_image(self,*a,**k): return ProviderResult(Provider.openai,'m',{}, {'id':'r'}, 'r', None, [ProviderImage(base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADElEQVR4nGNgYPgPAAEDAQCgAX6XAAAAAElFTkSuQmCC'))])
     def continue_image_turn(self,*a,**k): return self.create_initial_image()
-    def get_capabilities(self): return ProviderCapabilities(Provider.openai,True,True,False,False,False,True,[])
+    def get_capabilities(self): return ProviderCapabilities(Provider.openai,True,True,False,False,False,True,True,[])
 def test_create_session_and_asset(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     init_db(); app.dependency_overrides[get_router]=lambda: ProviderRouter({Provider.openai:Fake()},False)

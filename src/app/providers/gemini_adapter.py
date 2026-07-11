@@ -54,6 +54,7 @@ class GeminiImageAdapter(ImageProviderAdapter):
         if 'api key' in low or 'auth' in low: return ProviderAuthError(msg,'gemini')
         if 'quota' in low or '429' in msg: return ProviderRateLimitError(msg,'gemini')
         if 'safety' in low or 'blocked' in low: return ProviderSafetyBlockedError(msg,'gemini')
-        if 'invalid' in low or '400' in msg: return ProviderInvalidRequestError(msg,'gemini')
+        if isinstance(exc, ValueError) or any(term in low for term in ('invalid', '400', 'bad request', 'unsupported', 'unknown field', 'safetysetting', 'safety setting', 'harmcategory', 'harmblockthreshold')):
+            return ProviderInvalidRequestError(f'Invalid Gemini request or unsupported safety configuration for this model: {msg}','gemini')
         return ProviderTemporaryError(msg,'gemini')
-    def get_capabilities(self): return ProviderCapabilities(Provider.gemini,True,False,True,True,True,False,['Uses Google GenAI SDK generate_content with per-request safety_settings. Multi-turn is bounded context replay.'])
+    def get_capabilities(self): return ProviderCapabilities(Provider.gemini,True,False,True,True,True,False,False,['Uses Google GenAI SDK generate_content with per-request safety_settings. Multi-turn is bounded context replay.'])
